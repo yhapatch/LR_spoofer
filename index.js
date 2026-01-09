@@ -384,6 +384,16 @@ async function LR_stop_translate(){
 }
 
 async function LR_function_translate(action, strength, duration, loop_duration, loop_pause){
+    // Handle Stop action (sent as Function command by some games)
+    if (action == "Stop") {
+        if (IC_server_online) {
+            IC_send_vibration(0, 0)
+            IC_send_oscillation(0, 0)
+            IC_send_rotation(0, 0, true)
+        }
+        return
+    }
+
     let full_iterations = parseInt(duration / loop_duration + loop_pause); //how many full loops
     let last_iteration = duration -  (loop_duration + loop_pause ) * full_iterations; //final incomplete loop
     if (last_iteration > loop_duration){ last_iteration = loop_duration; } // make sure it's not too long
