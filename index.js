@@ -384,8 +384,29 @@ async function LR_stop_translate(){
 }
 
 async function LR_function_translate(action, strength, duration, loop_duration, loop_pause){
-    let full_iterations = parseInt(duration / loop_duration + loop_pause); //how many full loops
-    let last_iteration = duration -  (loop_duration + loop_pause ) * full_iterations; //final incomplete loop
+    // Handle simple case: no looping, just send for the full duration
+    if (loop_duration === 0 || isNaN(loop_duration)) {
+        if (IC_server_online) {
+            if (action == "Vibrate") {
+                IC_send_vibration(strength / 20, duration)
+            }
+            if (action == "Rotate") {
+                IC_send_rotation(strength / 20, duration, true)
+            }
+            if (action == "Thrusting") {
+                IC_send_oscillation(strength / 20, duration)
+            }
+            if (action == "All") {
+                if (!vibrating) IC_send_vibration(strength / 20, duration)
+                if (!oscillating) IC_send_oscillation(strength / 20, duration)
+                if (!rotating) IC_send_rotation(strength / 20, duration, true)
+            }
+        }
+        return
+    }
+
+    let full_iterations = parseInt(duration / (loop_duration + loop_pause)); //how many full loops
+    let last_iteration = duration - (loop_duration + loop_pause) * full_iterations; //final incomplete loop
     if (last_iteration > loop_duration){ last_iteration = loop_duration; } // make sure it's not too long
 
     let has_final_loop = false
@@ -405,12 +426,10 @@ async function LR_function_translate(action, strength, duration, loop_duration, 
             //vibrate
             if (action == "Vibrate") {
                 IC_send_vibration(strength / 20, loop_duration)
-                //console.log("sent_vibration")
             }
             //rotate
             if (action == "Rotate") {
                 IC_send_rotation(strength / 20, loop_duration, true)
-                //console.log("sent_rotation")
             }
             //pump
             if (action == "Pump") {
@@ -418,7 +437,6 @@ async function LR_function_translate(action, strength, duration, loop_duration, 
             //thrust
             if (action == "Thrusting") {
                 IC_send_oscillation(strength / 20, loop_duration)
-                //console.log("sent_oscillation")
             }
             //fingering
             if (action == "Fingering") {
@@ -430,25 +448,23 @@ async function LR_function_translate(action, strength, duration, loop_duration, 
             if (action == "Depth") {}
             //all
             if (action == "All") {
-                if (! vibrating) {IC_send_vibration(strength / 20, loop_duration)}
-                if (! oscillating) {IC_send_oscillation(strength / 20, loop_duration)}
-                if (! rotating) {IC_send_rotation(strength / 20, loop_duration, true)}
+                if (!vibrating) IC_send_vibration(strength / 20, loop_duration)
+                if (!oscillating) IC_send_oscillation(strength / 20, loop_duration)
+                if (!rotating) IC_send_rotation(strength / 20, loop_duration, true)
             }
 
             await new Promise(r => setTimeout(r, loop_pause));
         }
 
         //LAST ITERATION
-        if (has_final_loop && ! LR_stop) {
+        if (has_final_loop && !LR_stop) {
             //vibrate
             if (action == "Vibrate") {
                 IC_send_vibration(strength / 20, last_iteration)
-                //console.log("sent_vibration")
             }
             //rotate
             if (action == "Rotate") {
                 IC_send_rotation(strength / 20, last_iteration, true)
-                //console.log("sent_rotation")
             }
             //pump
             if (action == "Pump") {
@@ -456,7 +472,6 @@ async function LR_function_translate(action, strength, duration, loop_duration, 
             //thrust
             if (action == "Thrusting") {
                 IC_send_oscillation(strength / 20, last_iteration)
-                //console.log("sent_oscillation")
             }
             //fingering
             if (action == "Fingering") {
@@ -469,15 +484,9 @@ async function LR_function_translate(action, strength, duration, loop_duration, 
             }
             //all
             if (action == "All") {
-                if (!vibrating) {
-                    IC_send_vibration(strength / 20, last_iteration)
-                }
-                if (!oscillating) {
-                    IC_send_oscillation(strength / 20, last_iteration)
-                }
-                if (!rotating) {
-                    IC_send_rotation(strength / 20, last_iteration, true)
-                }
+                if (!vibrating) IC_send_vibration(strength / 20, last_iteration)
+                if (!oscillating) IC_send_oscillation(strength / 20, last_iteration)
+                if (!rotating) IC_send_rotation(strength / 20, last_iteration, true)
             }
         }
     }
