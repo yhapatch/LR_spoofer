@@ -526,9 +526,9 @@ async function LR_pattern_translate(action, strength_list, duration, interval){
             }
             //all
             if (action == "a") {
-                if (! vibrating) {IC_send_vibration(strength / 20, 0)}
-                if (! oscillating) {IC_send_oscillation(strength / 20, 0)}
-                if (! rotating) {IC_send_rotation(strength / 20, 0, true)}
+                if (! vibrating) {IC_send_vibration(strength_list[j] / 20, 0)}
+                if (! oscillating) {IC_send_oscillation(strength_list[j] / 20, 0)}
+                if (! rotating) {IC_send_rotation(strength_list[j] / 20, 0, true)}
             }
         }
         j += 1
