@@ -85,7 +85,7 @@ const tui_data = {
 const toy_data = {
     "code": 200,
     "data": {
-        "toys": "{  \"f082c00246fa\" : {    \"id\" : \"f082c00246fa\",    \"status\" : \"1\",    \"version\" : \"\",    \"name\" : \"spoofer\",    \"battery\" : 60,    \"nickName\" : \"\",    \"shortFunctionNames\" : [      \"v\",    \"r\",    \"p\",    \"t\",    \"f\",    \"s\",    \"d\",    \"o\"    ],    \"fullFunctionNames\" : [       \"Vibrate\",    \"Rotate\",    \"Pump\",    \"Thrusting\",    \"Fingering\",    \"Suction\",    \"Depth\",    \"Oscillate\"    ]  }}",
+        "toys": "{  \"f082c00246fa\" : {    \"id\" : \"f082c00246fa\",    \"status\" : \"1\",    \"version\" : \"\",    \"name\" : \"max\",    \"battery\" : 60,    \"nickName\" : \"\",    \"shortFunctionNames\" : [      \"v\",    \"r\",    \"p\",    \"t\",    \"f\",    \"s\",    \"d\",    \"o\"    ],    \"fullFunctionNames\" : [       \"Vibrate\",    \"Rotate\",    \"Pump\",    \"Thrusting\",    \"Fingering\",    \"Suction\",    \"Depth\",    \"Oscillate\"    ]  }}",
         "platform": "ios",
         "appType": "remote"
     },
