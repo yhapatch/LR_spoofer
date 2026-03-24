@@ -413,6 +413,11 @@ async function LR_function_translate(action, strength, duration, loop_duration, 
         LR_abort()
         return
     }
+    if (!loop_duration) {
+        loop_duration = duration;
+        loop_pause = 0;
+    }
+
     let full_iterations = parseInt(duration / (loop_duration + loop_pause)); //how many full loops
     let last_iteration = duration -  (loop_duration + loop_pause ) * full_iterations; //final incomplete loop
     if (last_iteration > loop_duration){ last_iteration = loop_duration; } // make sure it's not too long
@@ -438,17 +443,17 @@ async function LR_function_translate(action, strength, duration, loop_duration, 
 
             switch (action) {
                 case "Vibrate": // vibrate
-                    IC_send_vibration(strength / 20, loop_duration)
                     console.log("sent_vibration")
+                    await IC_send_vibration(strength / 20, loop_duration)
                     break
                 case "Rotate": // rotate
-                    IC_send_rotation(strength / 20, loop_duration, true)
+                    await IC_send_rotation(strength / 20, loop_duration, true)
                     //console.log("sent_rotation")
                     break
                 case "Pump": // pump
                     break
                 case "Thrusting": // thrust
-                    IC_send_oscillation(strength / 20, loop_duration)
+                    await IC_send_oscillation(strength / 20, loop_duration)
                     //console.log("sent_oscillation")
                     break
                 case "Fingeringf": // fingering
@@ -456,9 +461,11 @@ async function LR_function_translate(action, strength, duration, loop_duration, 
                 case "Suction": // suction
                     break
                 case "All": // all
-                    IC_send_vibration(strength / 20, loop_duration)
-                    IC_send_oscillation(strength / 20, loop_duration)
-                    IC_send_rotation(strength / 20, loop_duration, true)
+                    await Promise.all([
+                        IC_send_vibration(strength / 20, loop_duration),
+                        IC_send_oscillation(strength / 20, loop_duration),
+                        IC_send_rotation(strength / 20, loop_duration, true)
+                    ])
                     break
             }
 
@@ -471,16 +478,15 @@ async function LR_function_translate(action, strength, duration, loop_duration, 
             switch (action) {
                 case "Vibrate": // vibrate
                     IC_send_vibration(strength / 20, last_iteration)
-                    console.log("sent_vibration")
                     break
                 case "Rotate": // rotate
-                    IC_send_rotation(strength / 20, last_iteration, true)
+                    await IC_send_rotation(strength / 20, loop_duration, true)
                     //console.log("sent_rotation")
                     break
                 case "Pump": // pump
                     break
                 case "Thrusting": // thrust
-                    IC_send_oscillation(strength / 20, last_iteration)
+                    await IC_send_oscillation(strength / 20, loop_duration)
                     //console.log("sent_oscillation")
                     break
                 case "Fingeringf": // fingering
@@ -488,9 +494,11 @@ async function LR_function_translate(action, strength, duration, loop_duration, 
                 case "Suction": // suction
                     break
                 case "All": // all
-                    IC_send_vibration(strength / 20, last_iteration)
-                    IC_send_oscillation(strength / 20, last_iteration)
-                    IC_send_rotation(strength / 20, last_iteration, true)
+                    await Promise.all([
+                        IC_send_vibration(strength / 20, loop_duration),
+                        IC_send_oscillation(strength / 20, loop_duration),
+                        IC_send_rotation(strength / 20, loop_duration, true)
+                    ])
                     break
             }
         }
@@ -524,17 +532,17 @@ async function LR_pattern_translate(action, strength_list, duration, interval){
         for (let i = 0; i < iterations; i++) {
             switch (action) {
                 case "v": // vibrate
-                    IC_send_vibration(strength_list[j] / 20, interval)
+                    await IC_send_vibration(strength_list[j] / 20, interval)
                     console.log("sent_vibration")
                     break
                 case "r": // rotate
-                    IC_send_rotation(strength_list[j] / 20, interval, true)
+                    await IC_send_rotation(strength_list[j] / 20, interval, true)
                     //console.log("sent_rotation")
                     break
                 case "p": // pump
                     break
                 case "t": // thrust
-                    IC_send_oscillation(strength_list[j] / 20, interval)
+                    await IC_send_oscillation(strength_list[j] / 20, interval)
                     //console.log("sent_oscillation")
                     break
                 case "f": // fingering
@@ -542,14 +550,16 @@ async function LR_pattern_translate(action, strength_list, duration, interval){
                 case "s": // suction
                     break
                 case "a": // all
-                    IC_send_vibration(strength_list[j] / 20, interval)
-                    IC_send_oscillation(strength_list[j] / 20, interval)
-                    IC_send_rotation(strength_list[j] / 20, interval, true)
+                    await Promise.all([
+                        IC_send_vibration(strength_list[j] / 20, interval),
+                        IC_send_oscillation(strength_list[j] / 20, interval),
+                        IC_send_rotation(strength_list[j] / 20, interval, true)
+                    ]) 
                     break
             }
             j++;
             j %= strength_len;
-            await new Promise(r => setTimeout(r, interval));
+            // await new Promise(r => setTimeout(r, interval));
             if (abort) break;
         }
         if(!abort) {
