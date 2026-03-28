@@ -3,6 +3,7 @@ const ini = require('ini'); //for managing .ini file for persistent settings
 const {stringify} = require("ini");
 var term = require('terminal-kit').terminal; //library for TUI handling
 const http = require('http'); //for creating a server that pretends to be a Lovense Remote server
+const https = require('https'); //for HTTPS support
 const buttplug = require('buttplug') //for connecting to Intiface Central
 
 // read config file with persistent settings
@@ -140,8 +141,8 @@ async function TUI_print(){
     else { IC_auto_indicator = "^rOFF"}
 
     let LR_listen_indicator
-    if (LR_server_trying) {LR_listen_indicator = "^g" + config.LR_port}
-    else {LR_listen_indicator = "^r" + config.LR_port}
+    if (LR_server_trying) {LR_listen_indicator = "^g" + config.LR_http_port}
+    else {LR_listen_indicator = "^r" + config.LR_http_port}
 
     term("Game status: ")(online_indicator_LR)("           Intiface status: ")(online_indicator_IC)("\n");
 
@@ -173,86 +174,87 @@ async function TUI_print(){
 }
 
 //interpret user input into TUI
-//Nested 'if' statements to determine behavior in different menus, for different legal inputs
-//TODO: redo using cases
+//Uses switch/case statements to determine behavior in different menus
 function TUI_read_input(input){
     //make sure input is valid
-    if (Number.isInteger(input)) {
-        //if in main menu, move between menus
-        if (term_menu == 0) {
+    if (!Number.isInteger(input)) {
+        return
+    }
+
+    switch (term_menu) {
+        case 0: // Main menu
             if (input >= 0 && input <= 2) {
                 term_menu = input
             }
-            return
-        }
-        //LR settings
-        if (term_menu == 1){ //try to open/close server
-            if (input == 1){
-                LR_server_trying = ! LR_server_trying
-                LR_server_switch(LR_server_trying)
-            }
-            if (input == 2){ //switch auto connection
-                config.LR_auto = ! config.LR_auto
-                fs.writeFileSync('./settings.ini', stringify(config))
-                reparse_config()
-            }
-            if (input == 3){
-                term_menu = 4 //going to port input screen
-            }
-            if (input == 4){
-                logging = ! logging
+            break
 
+        case 1: // LR settings
+            switch (input) {
+                case 1: // Open/Close server
+                    LR_server_trying = !LR_server_trying
+                    LR_server_switch(LR_server_trying)
+                    break
+                case 2: // Switch auto connection
+                    config.LR_auto = !config.LR_auto
+                    fs.writeFileSync('./settings.ini', stringify(config))
+                    reparse_config()
+                    break
+                case 3: // Going to port input screen
+                    term_menu = 4
+                    break
+                case 4: // Turn command printing on/off
+                    logging = !logging
+                    break
+                case 5: // Back to main menu
+                    term_menu = 0
+                    break
             }
-            if (input == 5){
-                term_menu = 0 //back to main menu
-            }
-        return
-        }
-        //Intiface settings
-        if (term_menu == 2){ //try to open/close connection
-            if (input == 1){
-                IC_server_trying = ! IC_server_trying
-                IC_server_switch(IC_server_trying)
-            }
-            if (input == 2){ //switch auto connection
-                config.IC_auto = ! config.IC_auto
-                fs.writeFileSync('./settings.ini', stringify(config))
-                reparse_config()
-            }
-            if (input == 3){
-                term_menu = 5 // to port change
-            }
-            if (input == 4){
-                term_menu = 6 // to ip change
-            }
-            if (input == 5){
-                test_toys()
-            }
-            if (input == 6){
-                term_menu = 0 // back to main menu
-            }
+            break
 
-        }
-        return
-        //readme
-        if (term_menu == 3){}
-        }
-        //LR port input
-        if (term_menu == 4){
-            config.LR_port = input
+        case 2: // Intiface settings
+            switch (input) {
+                case 1: // Open/Close connection
+                    IC_server_trying = !IC_server_trying
+                    IC_server_switch(IC_server_trying)
+                    break
+                case 2: // Switch auto connection
+                    config.IC_auto = !config.IC_auto
+                    fs.writeFileSync('./settings.ini', stringify(config))
+                    reparse_config()
+                    break
+                case 3: // To port change
+                    term_menu = 5
+                    break
+                case 4: // To ip change
+                    term_menu = 6
+                    break
+                case 5: // Test toys
+                    test_toys()
+                    break
+                case 6: // Back to main menu
+                    term_menu = 0
+                    break
+            }
+            break
+
+        case 3: // README/Instructions
+            break
+
+        case 4: // LR port input
+            config.LR_http_port = input
             fs.writeFileSync('./settings.ini', stringify(config))
             reparse_config()
             term_menu = 1
-        return
-        }
-        //IC port input
-        if (term_menu == 5){
+            break
+
+        case 5: // IC port input
             config.IC_port = input
             fs.writeFileSync('./settings.ini', stringify(config))
             reparse_config()
             term_menu = 2
-        }
+            break
     }
+}
 
 function TUI_read_input_string(input){
     if (term_menu == 6) {
@@ -286,15 +288,37 @@ const LR_server = http.createServer(function (req, res) {
     }
 });
 
+//HTTPS server for mobile devices (with self-signed certificate)
+let LR_server_https;
+try {
+    const key = fs.readFileSync('./server.key');
+    const cert = fs.readFileSync('./server.cert');
+    LR_server_https = https.createServer({key: key, cert: cert}, function (req, res) {
+        if (req.method === "POST"){
+            let body = ''
+            req.on('data', function(data){
+                body += data
+            })
+            req.on('end', function(){
+                LR_command_parser(body,res)
+            })
+        }
+    });
+} catch(ex){
+    console.log("SSL certificates not found. HTTPS server will not be available.")
+    console.log("To enable HTTPS, generate certificates with: openssl req -nodes -new -x509 -keyout server.key -out server.cert -days 365")
+    LR_server_https = null
+}
+
 //parser function for the spoofer. check if it's a legal command, then translate it and send to Intiface handler
 //don't forget to send OK message back to the game
-function LR_command_parser(body,res){
+let reply_OK = {
+    "code": 200,
+    "type": "ok"
+}
+async function LR_command_parser(body,res){
     let data = JSON.parse(body)
     TUI_logging(data)
-    let reply_OK = {
-        "code": 200,
-        "type": "ok"
-    }
 
     if (data.hasOwnProperty("command")){
         LR_server_online = true
@@ -354,187 +378,195 @@ function LR_command_parser(body,res){
             res.end(JSON.stringify(reply_OK))
         }
         if (data.command == 'Preset'){
+            // TODO implement preset functionality
             res.writeHead(200, {'Content-Type': 'application/json'});
             res.end(JSON.stringify(reply_OK))
         }
         if (data.command == 'Stop'){
-            LR_stop_translate()
+            LR_abort()
 
             res.writeHead(200, {'Content-Type': 'application/json'});
             res.end(JSON.stringify(reply_OK))
-
-
         }
     }
 }
 
-let LR_stop = false
+let abort = false;
+let loops_running = new Set();
+let loop_id_counter = 0;
 
+async function LR_abort(){
+    abort = loops_running.size > 0;
+    LR_stop();
+}
 
-async function LR_stop_translate(){
+async function LR_stop(){
     if (IC_server_online) {
         IC_send_vibration(0, 1)
         IC_send_oscillation(0, 1)
         IC_send_rotation(0, 1, true)
-
-        LR_stop = true
-        await new Promise(r => setTimeout(r, 100));
-        LR_stop = false
     }
 }
 
 async function LR_function_translate(action, strength, duration, loop_duration, loop_pause){
-    let full_iterations = parseInt(duration / loop_duration + loop_pause); //how many full loops
+    if (action == "Stop") {
+        LR_abort()
+        return
+    }
+    if (!loop_duration) {
+        loop_duration = duration;
+        loop_pause = 0;
+    }
+
+    let full_iterations = parseInt(duration / (loop_duration + loop_pause)); //how many full loops
     let last_iteration = duration -  (loop_duration + loop_pause ) * full_iterations; //final incomplete loop
     if (last_iteration > loop_duration){ last_iteration = loop_duration; } // make sure it's not too long
-
+    
     let has_final_loop = false
     if (last_iteration > 0){has_final_loop = true}
     if (duration == 0) {
         has_final_loop = true
         last_iteration = 0
     }
-
+    
+    // New CMDs should owervrite old ones, but calling LR_abort creates gaps
+    if (loops_running.size > 0){
+        abort = true;
+    } else {
+        abort = false;
+    }
+    const loop_id = loop_id_counter++;
+    loops_running.add(loop_id);
     if (IC_server_online){
-
         //MAIN LOOP
         for (let i = 0; i < full_iterations; i++) {
 
-            if (LR_stop) {break}
-
-            //vibrate
-            if (action == "Vibrate") {
-                IC_send_vibration(strength / 20, loop_duration)
-                //console.log("sent_vibration")
-            }
-            //rotate
-            if (action == "Rotate") {
-                IC_send_rotation(strength / 20, loop_duration, true)
-                //console.log("sent_rotation")
-            }
-            //pump
-            if (action == "Pump") {
-            }
-            //thrust
-            if (action == "Thrusting") {
-                IC_send_oscillation(strength / 20, loop_duration)
-                //console.log("sent_oscillation")
-            }
-            //fingering
-            if (action == "Fingering") {
-            }
-            //suction
-            if (action == "Suction") {
-            }
-            //depth
-            if (action == "Depth") {}
-            //all
-            if (action == "All") {
-                if (! vibrating) {IC_send_vibration(strength / 20, loop_duration)}
-                if (! oscillating) {IC_send_oscillation(strength / 20, loop_duration)}
-                if (! rotating) {IC_send_rotation(strength / 20, loop_duration, true)}
+            switch (action) {
+                case "Vibrate": // vibrate
+                    console.log("sent_vibration")
+                    await IC_send_vibration(strength / 20, loop_duration)
+                    break
+                case "Rotate": // rotate
+                    await IC_send_rotation(strength / 20, loop_duration, true)
+                    //console.log("sent_rotation")
+                    break
+                case "Pump": // pump
+                    break
+                case "Thrusting": // thrust
+                    await IC_send_oscillation(strength / 20, loop_duration)
+                    //console.log("sent_oscillation")
+                    break
+                case "Fingeringf": // fingering
+                    break
+                case "Suction": // suction
+                    break
+                case "All": // all
+                    await Promise.all([
+                        IC_send_vibration(strength / 20, loop_duration),
+                        IC_send_oscillation(strength / 20, loop_duration),
+                        IC_send_rotation(strength / 20, loop_duration, true)
+                    ])
+                    break
             }
 
             await new Promise(r => setTimeout(r, loop_pause));
+            if (abort) break;
         }
 
         //LAST ITERATION
-        if (has_final_loop && ! LR_stop) {
-            //vibrate
-            if (action == "Vibrate") {
-                IC_send_vibration(strength / 20, last_iteration)
-                //console.log("sent_vibration")
-            }
-            //rotate
-            if (action == "Rotate") {
-                IC_send_rotation(strength / 20, last_iteration, true)
-                //console.log("sent_rotation")
-            }
-            //pump
-            if (action == "Pump") {
-            }
-            //thrust
-            if (action == "Thrusting") {
-                IC_send_oscillation(strength / 20, last_iteration)
-                //console.log("sent_oscillation")
-            }
-            //fingering
-            if (action == "Fingering") {
-            }
-            //suction
-            if (action == "Suction") {
-            }
-            //depth
-            if (action == "Depth") {
-            }
-            //all
-            if (action == "All") {
-                if (!vibrating) {
+        if (has_final_loop && !abort) {
+            switch (action) {
+                case "Vibrate": // vibrate
                     IC_send_vibration(strength / 20, last_iteration)
-                }
-                if (!oscillating) {
-                    IC_send_oscillation(strength / 20, last_iteration)
-                }
-                if (!rotating) {
-                    IC_send_rotation(strength / 20, last_iteration, true)
-                }
+                    break
+                case "Rotate": // rotate
+                    await IC_send_rotation(strength / 20, loop_duration, true)
+                    //console.log("sent_rotation")
+                    break
+                case "Pump": // pump
+                    break
+                case "Thrusting": // thrust
+                    await IC_send_oscillation(strength / 20, loop_duration)
+                    //console.log("sent_oscillation")
+                    break
+                case "Fingeringf": // fingering
+                    break
+                case "Suction": // suction
+                    break
+                case "All": // all
+                    await Promise.all([
+                        IC_send_vibration(strength / 20, loop_duration),
+                        IC_send_oscillation(strength / 20, loop_duration),
+                        IC_send_rotation(strength / 20, loop_duration, true)
+                    ])
+                    break
             }
         }
     }
+    if(!abort) {
+        LR_stop();
+    }
+    abort = false;
+    loops_running.delete(loop_id);
 }
 
 async function LR_pattern_translate(action, strength_list, duration, interval){
     let iterations = parseInt(duration / interval)
-    if (iterations == 0) {iterations = 99999} // for when timeSec is set as 0, meaning indefinite
-
+    if (iterations == 0) {iterations = 3600} // for when timeSec is set as 0, meaning indefinite
+    
+    // Lengthen the interval to ensure that overhead doesn't cause gaps in pattern
+    interval += 50;
+    
     let j = 0 //index for strength_list
+    const strength_len = strength_list.length;
 
+    // New CMDs should owervrite old ones, but calling LR_abort creates gaps
+    if (loops_running.size > 0){
+        abort = true;
+    } else {
+        abort = false;
+    }
+    const loop_id = loop_id_counter++;
+    loops_running.add(loop_id);
     if (IC_server_online) {
         for (let i = 0; i < iterations; i++) {
-            if (j > strength_list.length - 1) {
-                j = 0
-            } //let j index loop
-
-            if (LR_stop) {break}
-
-            await new Promise(r => setTimeout(r, interval));
-
-            //vibrate
-            if (action == "v") {
-
-                IC_send_vibration(strength_list[j] / 20, 0)
-                console.log("sent_vibration")
+            switch (action) {
+                case "v": // vibrate
+                    await IC_send_vibration(strength_list[j] / 20, interval)
+                    console.log("sent_vibration")
+                    break
+                case "r": // rotate
+                    await IC_send_rotation(strength_list[j] / 20, interval, true)
+                    //console.log("sent_rotation")
+                    break
+                case "p": // pump
+                    break
+                case "t": // thrust
+                    await IC_send_oscillation(strength_list[j] / 20, interval)
+                    //console.log("sent_oscillation")
+                    break
+                case "f": // fingering
+                    break
+                case "s": // suction
+                    break
+                case "a": // all
+                    await Promise.all([
+                        IC_send_vibration(strength_list[j] / 20, interval),
+                        IC_send_oscillation(strength_list[j] / 20, interval),
+                        IC_send_rotation(strength_list[j] / 20, interval, true)
+                    ]) 
+                    break
             }
-            //rotate
-            if (action == "r") {
-                IC_send_rotation(strength_list[j] / 20, 0, true)
-                //console.log("sent_rotation")
-            }
-            //pump
-            if (action == "p") {
-            }
-            //thrust
-            if (action == "t") {
-                IC_send_oscillation(strength_list[j] / 20, 0)
-                //console.log("sent_oscillation")
-            }
-            //fingering
-            if (action == "f") {
-            }
-            //suction
-            if (action == "s") {
-            }
-            //all
-            if (action == "a") {
-                if (! vibrating) {IC_send_vibration(strength / 20, 0)}
-                if (! oscillating) {IC_send_oscillation(strength / 20, 0)}
-                if (! rotating) {IC_send_rotation(strength / 20, 0, true)}
-            }
+            j++;
+            j %= strength_len;
+            // await new Promise(r => setTimeout(r, interval));
+            if (abort) break;
         }
-        j += 1
-        IC_send_vibration(0,1)
-        IC_send_oscillation(0,1)
-        IC_send_rotation(0,1,true)
+        if(!abort) {
+            LR_stop();
+        }
+        abort = false;
+        loops_running.delete(loop_id);
     }
 }
 
@@ -542,13 +574,25 @@ async function LR_pattern_translate(action, strength_list, duration, interval){
 function LR_server_switch(server_switch){
     if (server_switch) {
         try {
-            LR_server.listen(config.LR_port)
+            LR_server.listen(config.LR_http_port)
 
             LR_server.on('error', (e) => {
                 if (e.code === 'EADDRINUSE'){
                     console.error("LR port is currently in use")
                 }
             })
+            
+            // Also start HTTPS server on port+1 if certificates are available
+            if (LR_server_https) {
+                const https_port = config.LR_https_port
+                LR_server_https.listen(https_port)
+                
+                LR_server_https.on('error', (e) => {
+                    if (e.code === 'EADDRINUSE'){
+                        console.error("LR HTTPS port is currently in use")
+                    }
+                })
+            }
         } catch(ex){
             console.log(ex)
         }
@@ -556,7 +600,8 @@ function LR_server_switch(server_switch){
         }
 
     else {
-        LR_server.close()
+        if (LR_server) LR_server.close();
+        if (LR_server_https) LR_server_https.close();
     }
 }
 
@@ -603,7 +648,7 @@ let rotating = false
 //send vibration to all toys
 async function IC_send_vibration(speed, duration){
     try {
-        await client.devices.forEach((device) => {
+        client.devices.forEach((device) => {
             if (device.vibrateAttributes.length == 0) {
                 return;
             }
@@ -612,13 +657,15 @@ async function IC_send_vibration(speed, duration){
         });
         if (duration > 0) {
             await new Promise(r => setTimeout(r, duration));
-            await client.devices.forEach((device) => {
+            // Abort has already stopped devices
+            if (abort) return;
+            client.devices.forEach((device) => {
                 if (device.vibrateAttributes.length == 0) {
                     return;
                 }
                 device.vibrate(0)
-                vibrating = false
             });
+            vibrating = false
         }
     } catch (e){console.log(e)}
 
@@ -626,7 +673,7 @@ async function IC_send_vibration(speed, duration){
 //send oscillation to all toys
 async function IC_send_oscillation(speed, duration){
     try {
-        await client.devices.forEach((device) => {
+        client.devices.forEach((device) => {
             if (device.oscillateAttributes.length == 0) {
                 return;
             }
@@ -635,13 +682,15 @@ async function IC_send_oscillation(speed, duration){
         });
         if (duration > 0) {
             await new Promise(r => setTimeout(r, duration));
-            await client.devices.forEach((device) => {
+            // Abort has already stopped devices
+            if (abort) return;
+            client.devices.forEach((device) => {
                 if (device.oscillateAttributes.length == 0) {
                     return;
                 }
                 device.oscillate(0)
-                oscilating = false
             });
+            oscillating = false
         }
     } catch (e){console.log(e)}
 
@@ -649,7 +698,7 @@ async function IC_send_oscillation(speed, duration){
 //send rotation to all toys
 async function IC_send_rotation(speed, duration, clockwise) {
     try {
-        await client.devices.forEach((device) => {
+        client.devices.forEach((device) => {
             if (device.rotateAttributes.length == 0) {
                 return;
             }
@@ -658,13 +707,15 @@ async function IC_send_rotation(speed, duration, clockwise) {
         });
         if (duration > 0) {
             await new Promise(r => setTimeout(r, duration));
-            await client.devices.forEach((device) => {
+            // Abort has already stopped devices
+            if (abort) return;
+            client.devices.forEach((device) => {
                 if (device.rotateAttributes.length == 0) {
                     return;
                 }
                 device.rotate(0, true)
-                rotating = false
             });
+            rotating = false
         }
     } catch (e){console.log(e)}
 
